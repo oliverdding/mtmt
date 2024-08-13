@@ -3,18 +3,20 @@ services:
     image: mtphotos/mt-photos:nodb-latest
     container_name: mtphotos
     restart: unless-stopped
+    user: "1000:1000"
+    ports:
+      - "80:8063"
     volumes:
-      - ./data/mtphotots/config:/config
-      - ./data/mtphotots/upload:/upload
+      - ./data/mtphotos/config:/config
+      - ./data/mtphotos/upload:/upload
     environment:
       - MT_SERVER_PORT=8063
       - TZ=Asia/Shanghai
       - LANG=C.UTF-8
-      - PUID=1000
-      - PGID=1000
       - POSTGRES_HOST=mtphotos_db
       - POSTGRES_PASSWORD=mypassword
       - REDIS_HOST=mtphotos_cache
+      - REDIS_PORT=6379
       - REDIS_PASSWORD=mypassword
     depends_on:
       mtphotos_db:
@@ -23,20 +25,22 @@ services:
         condition: service_healthy
 
   mtphotos_db:
-    image: postgres:16-alpine
+    image: mtphotos/mt-photos-pg:latest # https://mtmt.tech/docs/advanced/ocr_api#vector
     container_name: mtphotos_pg
     restart: unless-stopped
     user: "1000:1000"
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
     environment:
+      - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=mypassword
       - PGDATA=/var/lib/postgresql/data/pgdata
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -d postgres" ]
-      interval: 30s
-      timeout: 10s
-      retries: 5
+      test: [ "CMD-SHELL", "sh -c 'pg_isready -U postgres -d postgres'" ]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
 
   mtphotos_cache:
     image: redis:7-alpine
@@ -60,32 +64,16 @@ services:
       retries: 5
     restart: on-failure
 
-  reverse-proxy:
-    image: traefik:latest
-    container_name: reverse-proxy
-    ports:
-      - "80:80"
-      - "8080:8080"
-    command:
-      - --api=true
-      - --ping=true
-      - --api.dashboard=true
-      - --providers.file.directory=/etc/traefik
-      - --providers.file.watch=false
-      - --entrypoints.web.address=:80
-      - --entrypoints.traefik.address=:8080
-      - --accesslog=true
-      - --log.level=WARN # DEBUG, INFO, WARN, ERROR, FATAL, PANIC
-    healthcheck:
-      test: [ "CMD-SHELL", "traefik healthcheck --ping" ]
-      interval: 5s
-      timeout: 3s
-      retries: 3
-      start_period: 5s
-    volumes:
-      - ./config/traefik:/etc/traefik
-    restart: on-failure
+  mtphotos_ai:
+    image: mtphotos/mt-photos-ai:onnx-latest
+    container_name: mtphotos_ai
+    restart: always
+    environment:
+      - API_AUTH_KEY=AB8C3768-0334-4B25-8FE5-3EF81C1158FD
 
-volumes:
-  cache:
-    driver: local
+  mtphotos_face_api:
+    image: mtphotos/mt-photos-deepface:noavx-latest
+    container_name: mtphotos_face_api
+    restart: always
+    environment:
+      - API_AUTH_KEY=F809EB6F-5E36-44F7-924B-2D8E68D59297

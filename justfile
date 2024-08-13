@@ -6,5 +6,5 @@ default:
 run:
     mkdir -p ./data/mtphotos/{config,upload}
     mkdir -p ./data/{postgres,redis}
-    chown -R 1000:100 ./data
+    chown -R 1000:1000 ./data
     docker compose up -d
