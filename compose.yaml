@@ -1,0 +1,91 @@
+services:
+  mtphotos:
+    image: mtphotos/mt-photos:nodb-latest
+    container_name: mtphotos
+    restart: unless-stopped
+    volumes:
+      - ./data/mtphotots/config:/config
+      - ./data/mtphotots/upload:/upload
+    environment:
+      - MT_SERVER_PORT=8063
+      - TZ=Asia/Shanghai
+      - LANG=C.UTF-8
+      - PUID=1000
+      - PGID=1000
+      - POSTGRES_HOST=mtphotos_db
+      - POSTGRES_PASSWORD=mypassword
+      - REDIS_HOST=mtphotos_cache
+      - REDIS_PASSWORD=mypassword
+    depends_on:
+      mtphotos_db:
+        condition: service_healthy
+      mtphotos_cache:
+        condition: service_healthy
+
+  mtphotos_db:
+    image: postgres:16-alpine
+    container_name: mtphotos_pg
+    restart: unless-stopped
+    user: "1000:1000"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=mypassword
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -d postgres" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  mtphotos_cache:
+    image: redis:7-alpine
+    container_name: mtphotos_redis
+    command:
+      [
+        "redis-server",
+        "--appendonly",
+        "yes",
+        "--loglevel",
+        "warning",
+        "--requirepass",
+        "mypassword"
+      ]
+    volumes:
+      - ./data/redis:/data
+    healthcheck:
+      test: [ "CMD-SHELL", "redis-cli -a mypassword ping | grep PONG" ]
+      interval: 1s
+      timeout: 3s
+      retries: 5
+    restart: on-failure
+
+  reverse-proxy:
+    image: traefik:latest
+    container_name: reverse-proxy
+    ports:
+      - "80:80"
+      - "8080:8080"
+    command:
+      - --api=true
+      - --ping=true
+      - --api.dashboard=true
+      - --providers.file.directory=/etc/traefik
+      - --providers.file.watch=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.traefik.address=:8080
+      - --accesslog=true
+      - --log.level=WARN # DEBUG, INFO, WARN, ERROR, FATAL, PANIC
+    healthcheck:
+      test: [ "CMD-SHELL", "traefik healthcheck --ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    volumes:
+      - ./config/traefik:/etc/traefik
+    restart: on-failure
+
+volumes:
+  cache:
+    driver: local

@@ -1,0 +1,12 @@
+http:
+  routers:
+    mtphotos-router:
+      rule: "PathPrefix(`/mtphotos/`)"
+      entrypoints:
+        - web
+      service: mtphotos-service
+  services:
+    mtphotos-service:
+      loadBalancer:
+        servers:
+          - url: http://mtphotos:8063
