@@ -4,8 +4,6 @@ services:
     container_name: mtphotos
     restart: unless-stopped
     user: "1000:1000"
-    ports:
-      - "80:8063"
     volumes:
       - ./data/mtphotos/config:/config
       - ./data/mtphotos/upload:/upload
@@ -23,6 +21,13 @@ services:
         condition: service_healthy
       mtphotos_cache:
         condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.mtphotos.rule=Host(`zippy.charmer.fun`)"
+      - "traefik.http.routers.mtphotos.entrypoints=websecure"
+      - "traefik.http.routers.mtphotos.tls=true"
+      - "traefik.http.routers.mtphotos.tls.certresolver=myresolver"
+      - "traefik.http.services.my-service.loadbalancer.server.port=8063"
 
   mtphotos_db:
     image: mtphotos/mt-photos-pg:latest # https://mtmt.tech/docs/advanced/ocr_api#vector
@@ -77,3 +82,36 @@ services:
     restart: always
     environment:
       - API_AUTH_KEY=F809EB6F-5E36-44F7-924B-2D8E68D59297
+
+  reverse-proxy:
+    image: traefik:latest
+    container_name: reverse-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    command:
+      - --api=true
+      - --ping=true
+      - --api.dashboard=true
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.traefik.address=:8080
+      - --accesslog=true
+      - --log.level=WARN # DEBUG, INFO, WARN, ERROR, FATAL, PANIC
+      - --certificatesresolvers.myresolver.acme.tlschallenge=true
+      #- "--certificatesresolvers.myresolver.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory"
+      - --certificatesresolvers.myresolver.acme.email=oliverdding@outlook.com
+      - --certificatesresolvers.myresolver.acme.httpChallenge.entryPoint=web
+      - --certificatesresolvers.myresolver.acme.storage=/cert/acme.json
+    healthcheck:
+      test: [ "CMD-SHELL", "traefik healthcheck --ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    restart: on-failure
+    volumes:
+      - "./data/cert:/cert"
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
