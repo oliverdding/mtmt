@@ -23,9 +23,11 @@ services:
         condition: service_healthy
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.mtphotos.rule=Host(`zippy.charmer.fun`)"
-      - "traefik.http.routers.mtphotos.entrypoints=websecure"
-      - "traefik.http.routers.mtphotos.tls.certresolver=myresolver"
+      - "traefik.http.routers.mtphotos-secure.entrypoints=websecure"
+      - "traefik.http.routers.mtphotos-secure.rule=Host(`zippy.charmer.fun`)"
+      - "traefik.http.routers.mtphotos-secure.tls.certresolver=myresolver"
+      - "traefik.http.routers.mtphotos.entrypoints=web"
+      - "traefik.http.routers.mtphotos.rule=PathPrefix(`/`)"
       - "traefik.http.services.mtphotos.loadbalancer.server.port=8063"
 
   mtphotos_db:
@@ -86,6 +88,7 @@ services:
     image: traefik:latest
     container_name: reverse-proxy
     ports:
+      - "80:80"
       - "443:443"
       - "8080:8080"
     command:
@@ -95,10 +98,12 @@ services:
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
       - --entrypoints.websecure.address=:443
+      - --entrypoints.web.address=:80
       - --entrypoints.traefik.address=:8080
       - --accesslog=true
       - --log.level=WARN # DEBUG, INFO, WARN, ERROR, FATAL, PANIC
-      - --certificatesresolvers.myresolver.acme.tlschallenge=true
+      - --certificatesresolvers.myresolver.acme.httpchallenge=true
+      - --certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web
       # - --certificatesresolvers.myresolver.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory
       - --certificatesresolvers.myresolver.acme.email=oliverdding@outlook.com
       - --certificatesresolvers.myresolver.acme.storage=/cert/acme.json
